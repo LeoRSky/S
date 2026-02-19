@@ -1,43 +1,53 @@
 import socket
-import sys
+import threading
 
 HOST = '127.0.0.1'
 PORT = 4000
 
+clients = []
+
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server.bind((HOST, PORT))
-server.listen(1)
+server.listen()
 
-print("--- Сервер чата запущен ---")
-print("Ожидание подключения клиента...")
+print("--- Сервер запущен ---")
+print("Ожидание подключений...")
+
+def handle_client(client_socket, address):
+    print(f"[OK] Клиент {address} подключился.")
+    clients.append(client_socket)
+
+    try:
+        while True:
+            data = client_socket.recv(1024)
+            if not data:
+                break
+    except:
+        pass
+    finally:
+        print(f"[!] Клиент {address} отключился.")
+        clients.remove(client_socket)
+        client_socket.close()
+
+def send_messages():
+    while True:
+        message = input("Сообщение для всех клиентов: ")
+        for client in clients:
+            try:
+                client.send(message.encode('utf-8'))
+            except:
+                pass
+
+threading.Thread(target=send_messages, daemon=True).start()
 
 try:
     while True:
         client_socket, address = server.accept()
-        print(f"[OK] Клиент {address} подключился.")
-
-        with client_socket:
-            while True:
-                try:
-                    data = client_socket.recv(1024).decode('utf-8')
-                    if not data:
-                        print(f"Клиент {address} отключился.")
-                        break
-
-                    print(f"\n[Клиент {address}]: {data}")
-                    reply = input("Ваш ответ (Сервер): ")
-                    client_socket.send(reply.encode('utf-8'))
-
-                except (ConnectionResetError, BrokenPipeError):
-                    print(f"\nСвязь с клиентом {address} потеряна.")
-                    break
-                except Exception as e:
-                    print(f"Произошла ошибка: {e}")
-                    break
+        thread = threading.Thread(target=handle_client, args=(client_socket, address))
+        thread.start()
 
 except KeyboardInterrupt:
-    print("\nСервер остановлен пользователем.")
+    print("\nСервер остановлен.")
 finally:
     server.close()
-    sys.exit(0)
